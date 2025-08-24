@@ -1,22 +1,22 @@
-from flask import Flask, request, jsonify, render_template
-import json
+from flask import Flask, request, jsonify, render_template, session
 import os
-from collections import Counter
 
 app = Flask(__name__)
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+# 세션을 사용하기 위해 반드시 secret_key를 설정해야 합니다.
+app.secret_key = os.urandom(24) 
 
-game_state = {
-    "board_6": [],
-    "board_2_1": [],
-    "board_2_2": []
-}
-
-@app.route('/')
-def index():
-    return render_template('index.html')
+def get_user_game_state():
+    """사용자 세션의 게임 상태를 가져오거나, 없으면 초기 상태를 반환합니다."""
+    if 'game_state' not in session:
+        session['game_state'] = {
+            "board_6": [],
+            "board_2_1": [],
+            "board_2_2": []
+        }
+    return session['game_state']
 
 def rebuild_2_board(board_6_results):
+    """2매표 보드를 재구성하는 로직 (기존 코드와 동일)"""
     filtered_results = [r['result'] for r in board_6_results if r['result'] in ['P', 'B']]
     
     if not filtered_results:
@@ -43,10 +43,7 @@ def rebuild_2_board(board_6_results):
     board_2_2 = []
     
     for i, col in enumerate(board_2_results):
-        highlight = False
-        if len(col) == 2:
-            highlight = True
-        
+        highlight = len(col) == 2
         for item in col:
             item['highlight'] = highlight
             
@@ -57,21 +54,26 @@ def rebuild_2_board(board_6_results):
 
     return board_2_1, board_2_2
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 @app.route('/add_round', methods=['POST'])
 def add_round():
-    global game_state
+    user_state = get_user_game_state()
     data = request.json
     result = data.get('result')
     
     if result and result in ['P', 'B', 'T', 'S', 'D']:
-        game_state["board_6"].append({'result': result})
-        game_state["board_2_1"], game_state["board_2_2"] = rebuild_2_board(game_state["board_6"])
-        predictions = {} # 예측 로직을 프론트엔드로 옮김
+        user_state["board_6"].append({'result': result})
+        user_state["board_2_1"], user_state["board_2_2"] = rebuild_2_board(user_state["board_6"])
+        session['game_state'] = user_state # 세션에 업데이트된 상태 저장
+        predictions = {}
         return jsonify({
             "success": True, 
-            "board_6": game_state["board_6"],
-            "board_2_1": game_state["board_2_1"],
-            "board_2_2": game_state["board_2_2"],
+            "board_6": user_state["board_6"],
+            "board_2_1": user_state["board_2_1"],
+            "board_2_2": user_state["board_2_2"],
             "predictions": predictions
         })
     else:
@@ -79,28 +81,29 @@ def add_round():
 
 @app.route('/get_game_state', methods=['GET'])
 def get_game_state():
-    global game_state
-    predictions = {} # 예측 로직을 프론트엔드로 옮김
+    user_state = get_user_game_state()
+    predictions = {}
     return jsonify({
         "success": True, 
-        "board_6": game_state["board_6"],
-        "board_2_1": game_state["board_2_1"],
-        "board_2_2": game_state["board_2_2"],
+        "board_6": user_state["board_6"],
+        "board_2_1": user_state["board_2_1"],
+        "board_2_2": user_state["board_2_2"],
         "predictions": predictions
     })
 
 @app.route('/delete_last', methods=['POST'])
 def delete_last():
-    global game_state
-    if game_state["board_6"]:
-        game_state["board_6"].pop()
-        game_state["board_2_1"], game_state["board_2_2"] = rebuild_2_board(game_state["board_6"])
-        predictions = {} # 예측 로직을 프론트엔드로 옮김
+    user_state = get_user_game_state()
+    if user_state["board_6"]:
+        user_state["board_6"].pop()
+        user_state["board_2_1"], user_state["board_2_2"] = rebuild_2_board(user_state["board_6"])
+        session['game_state'] = user_state # 세션에 업데이트된 상태 저장
+        predictions = {}
         return jsonify({
             "success": True, 
-            "board_6": game_state["board_6"],
-            "board_2_1": game_state["board_2_1"],
-            "board_2_2": game_state["board_2_2"],
+            "board_6": user_state["board_6"],
+            "board_2_1": user_state["board_2_1"],
+            "board_2_2": user_state["board_2_2"],
             "predictions": predictions
         })
     else:
@@ -108,19 +111,18 @@ def delete_last():
 
 @app.route('/reset', methods=['POST'])
 def reset_game():
-    global game_state
-    game_state = {
-        "board_6": [],
-        "board_2_1": [],
-        "board_2_2": []
-    }
-    predictions = {} # 예측 로직을 프론트엔드로 옮김
+    # 세션에서 해당 사용자의 게임 상태를 삭제하여 초기화
+    if 'game_state' in session:
+        del session['game_state']
+    
+    user_state = get_user_game_state() # 초기화된 상태를 다시 가져옴
+    predictions = {}
     return jsonify({
         "success": True,
         "message": "게임이 초기화되었습니다.",
-        "board_6": game_state["board_6"],
-        "board_2_1": game_state["board_2_1"],
-        "board_2_2": game_state["board_2_2"],
+        "board_6": user_state["board_6"],
+        "board_2_1": user_state["board_2_1"],
+        "board_2_2": user_state["board_2_2"],
         "predictions": predictions
     })
 
