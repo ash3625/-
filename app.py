@@ -1,22 +1,22 @@
 from flask import Flask, request, jsonify, render_template, session
 import os
+from collections import Counter
 
+# Flask 앱 초기화
 app = Flask(__name__)
+
 # 세션을 사용하기 위해 반드시 secret_key를 설정해야 합니다.
-app.secret_key = os.urandom(24) 
+# os.environ.get()을 사용하여 환경 변수에서 SECRET_KEY를 가져옵니다.
+# 만약 환경 변수가 설정되지 않았을 경우, 임의의 기본값을 사용합니다.
+# 이 기본값은 배포 환경에서 반드시 안전한 값으로 변경해야 합니다.
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
-def get_user_game_state():
-    """사용자 세션의 게임 상태를 가져오거나, 없으면 초기 상태를 반환합니다."""
-    if 'game_state' not in session:
-        session['game_state'] = {
-            "board_6": [],
-            "board_2_1": [],
-            "board_2_2": []
-        }
-    return session['game_state']
-
+# 2매표 보드를 재구성하는 함수
 def rebuild_2_board(board_6_results):
-    """2매표 보드를 재구성하는 로직 (기존 코드와 동일)"""
+    """
+    6매표 결과를 기반으로 2매표 보드를 재구성합니다.
+    'P' 또는 'B' 결과만 사용하여 보드를 만듭니다.
+    """
     filtered_results = [r['result'] for r in board_6_results if r['result'] in ['P', 'B']]
     
     if not filtered_results:
@@ -26,10 +26,12 @@ def rebuild_2_board(board_6_results):
     current_col = []
     
     for result in filtered_results:
+        # 새로운 컬럼 시작
         if not current_col or current_col[-1]['result'] != result:
             if current_col:
                 board_2_results.append(current_col)
             current_col = [{'result': result, 'highlight': False}]
+        # 동일한 결과가 연속되는 경우, 최대 2개까지만 추가
         elif len(current_col) < 2:
             current_col.append({'result': result, 'highlight': False})
         else:
@@ -38,6 +40,7 @@ def rebuild_2_board(board_6_results):
     if current_col:
         board_2_results.append(current_col)
     
+    # 보드 분리 로직 (30개 컬럼 기준)
     max_cols_2_1 = 30
     board_2_1 = []
     board_2_2 = []
@@ -54,12 +57,28 @@ def rebuild_2_board(board_6_results):
 
     return board_2_1, board_2_2
 
+def get_user_game_state():
+    """
+    사용자의 세션에서 게임 상태를 가져옵니다.
+    세션에 상태가 없으면 초기 상태를 설정하여 반환합니다.
+    """
+    if 'game_state' not in session:
+        session['game_state'] = {
+            "board_6": [],
+            "board_2_1": [],
+            "board_2_2": []
+        }
+    return session['game_state']
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/add_round', methods=['POST'])
 def add_round():
+    """
+    사용자로부터 라운드 결과를 받아 게임 상태에 추가합니다.
+    """
     user_state = get_user_game_state()
     data = request.json
     result = data.get('result')
@@ -81,6 +100,9 @@ def add_round():
 
 @app.route('/get_game_state', methods=['GET'])
 def get_game_state():
+    """
+    현재 사용자의 게임 상태를 반환합니다.
+    """
     user_state = get_user_game_state()
     predictions = {}
     return jsonify({
@@ -93,6 +115,9 @@ def get_game_state():
 
 @app.route('/delete_last', methods=['POST'])
 def delete_last():
+    """
+    마지막 라운드 결과를 삭제합니다.
+    """
     user_state = get_user_game_state()
     if user_state["board_6"]:
         user_state["board_6"].pop()
@@ -111,11 +136,13 @@ def delete_last():
 
 @app.route('/reset', methods=['POST'])
 def reset_game():
-    # 세션에서 해당 사용자의 게임 상태를 삭제하여 초기화
+    """
+    현재 사용자의 게임 상태를 초기화합니다.
+    """
     if 'game_state' in session:
         del session['game_state']
     
-    user_state = get_user_game_state() # 초기화된 상태를 다시 가져옴
+    user_state = get_user_game_state()
     predictions = {}
     return jsonify({
         "success": True,
