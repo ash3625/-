@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>젤루악마틴 배팅 도우미</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Tailwind에서 직접 처리하기 어려운 보드 그리드용 커스텀 스타일 */
+        .board-grid-6 {
+            grid-template-columns: repeat(auto-fill, minmax(25px, 1fr));
+            grid-auto-flow: column;
+            grid-auto-columns: 25px;
+            height: 150px; /* 6행 * 행당 25px */
+        }
+        .board-grid-2 {
+            grid-template-rows: repeat(2, 25px);
+            grid-auto-flow: column;
+            grid-auto-columns: 25px;
+        }
+        .cell {
+            width: 25px;
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #ccc;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .prediction-x {
+            color: #D9534F; /* Red color for 'X' */
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        .cell-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        .circle-result {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: white;
+        }
+        .prediction-circle {
+            width: 20px;
+            height: 20px;
+            border: 2px dashed;
+            border-radius: 50%;
+            position: relative;
+        }
+        .prediction-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 p-4 min-h-screen flex items-center justify-center">
+
+    <div class="bg-gray-800 rounded-2xl shadow-xl p-4 md:p-6 w-full max-w-2xl mx-auto flex flex-col items-center">
+        <h1 class="text-2xl md:text-3xl font-bold text-center mb-4 text-white">젤루악마틴 배팅 도우미</h1>
+
+        <div class="flex flex-col md:flex-row justify-between items-center w-full mb-4 space-y-2 md:space-y-0 md:space-x-4">
+            <div class="flex flex-wrap justify-center space-x-2">
+                <button onclick="resetGameConfirmation()" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition-colors">전체 리셋</button>
+                <button onclick="showUsageGuide()" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition-colors">사용법</button>
+                <button onclick="showSiteRecommendation()" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition-colors">사이트 추천</button>
+            </div>
+            <button id="akmatin-btn" onclick="toggleAkmatin()" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform hover:scale-105 active:scale-95">악마틴 예측 (OFF)</button>
+        </div>
+
+        <div class="flex justify-center space-x-2 w-full mb-6">
+            <button style="background-color:#29ABE2;" onclick="addRound('P')" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform hover:scale-105 active:scale-95">P</button>
+            <button style="background-color:#D9534F;" onclick="addRound('B')" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform hover:scale-105 active:scale-95">B</button>
+            <button style="background-color:#5CB85C;" onclick="addRound('T')" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform hover:scale-105 active:scale-95">T</button>
+            <button style="background-color:#F0AD4E;" onclick="deleteLast()" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform hover:scale-105 active:scale-95">한칸 삭제</button>
+        </div>
+
+        <div class="w-full bg-gray-700 p-4 rounded-lg shadow-inner mb-4">
+            <h2 class="text-center font-bold text-lg mb-2">6매표 (악마틴)</h2>
+            <div id="board-6" class="board-grid-6 grid border-2 border-gray-600 bg-gray-900 overflow-x-auto overflow-y-hidden whitespace-nowrap"></div>
+            <div id="stats-6" class="text-sm text-gray-400 mt-2 text-center"></div>
+        </div>
+        
+        <div class="w-full bg-gray-700 p-4 rounded-lg shadow-inner mb-4">
+            <h2 class="text-center font-bold text-lg mb-2">2매표 (젤루틴)</h2>
+            <div id="board-2-1" class="board-grid-2 grid border-2 border-gray-600 bg-gray-900 overflow-x-auto whitespace-nowrap mb-2"></div>
+            <div id="board-2-2" class="board-grid-2 grid border-2 border-gray-600 bg-gray-900 overflow-x-auto whitespace-nowrap"></div>
+            <p class="text-xs text-gray-400 mt-2 text-center font-bold">악마틴 예측값이 같다면 반대로 배팅</p>
+        </div>
+
+        <div class="prediction-info text-center mt-2">
+            <p id="akmatin-pred-label" class="font-bold text-base"></p>
+        </div>
+    </div>
+    
+    <div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-gray-800 text-gray-100 p-6 rounded-lg shadow-2xl max-w-sm w-full text-center relative">
+            <button onclick="closeResetConfirmation()" class="close-btn">&times;</button>
+            <p class="text-lg font-bold mb-4">정말로 모든 기록을 초기화하시겠습니까?</p>
+            <div class="flex justify-center space-x-4">
+                <button onclick="confirmReset()" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-500 transition-colors">초기화</button>
+                <button onclick="closeResetConfirmation()" class="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-gray-500 transition-colors">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="message-box" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-gray-800 text-gray-100 p-6 rounded-lg shadow-2xl max-w-lg w-full relative max-h-[80vh]">
+            <button onclick="closeMessageBox()" class="close-btn">&times;</button>
+            <div id="message-text" class="text-sm md:text-base text-left whitespace-pre-wrap overflow-y-auto pr-2" style="max-height: calc(80vh - 6rem);"></div>
+        </div>
+    </div>
+
+    <script>
+        const colorMap = {"B": "#D9534F", "P": "#29ABE2", "T": "#5CB85C"};
+        let akmatinEnabled = false;
+        let gameData = { board_6: [], board_2_1: [], board_2_2: [] };
+        
+        // 6매표에 대한 예측 로직을 담당하는 함수
+        function getPredictions(results) {
+            const predictions = {
+                akmatin: null,
+                stopBetting: false,
+                stopIndices: [],
+            };
+            const len = results.length;
+            const numRows = 6;
+            
+            const allPotentialStopIndices = new Set();
+            
+            // 1. 기존 T 조건에 따른 X 예측
+            for (let i = 0; i < len; i++) {
+                if (results[i].result === 'T') {
+                    const row = i % numRows;
+                    const column = Math.floor(i / numRows);
+                    
+                    if (row === 0) {
+                        for (let j = i + 1; j < (column + 1) * numRows; j++) {
+                            allPotentialStopIndices.add(j);
+                        }
+                        for (let j = (column + 1) * numRows; j < (column + 2) * numRows; j++) {
+                            allPotentialStopIndices.add(j);
+                        }
+                    } else {
+                        const nextIndexInNextColumn = (column + 1) * numRows + row;
+                        allPotentialStopIndices.add(nextIndexInNextColumn);
+                    }
+                }
+            }
+
+            // 2. 새로 시작하는 줄의 첫 번째 칸에 X 예측 추가
+            if (len > 0 && (len % numRows === 0)) {
+                allPotentialStopIndices.add(len);
+            }
+
+            // 중복 제거 및 현재 시점에서 보여줄 다음 X 인덱스만 추가
+            const sortedIndices = Array.from(allPotentialStopIndices).sort((a, b) => a - b);
+            for (const idx of sortedIndices) {
+                if (idx >= len) {
+                    predictions.stopIndices.push(idx);
+                    break;
+                }
+            }
+            
+            // '같으면 다르게 다르면 같게' 예측 로직 적용
+            let akmatinPredicted = false;
+            
+            if (len > 0 && (len % numRows > 0) && len > numRows) {
+                const currentColumnFirstIndex = Math.floor(len / numRows) * numRows;
+                const previousColumnFirstIndex = currentColumnFirstIndex - numRows;
+                
+                if (previousColumnFirstIndex >= 0 && (previousColumnFirstIndex + 1) < len) {
+                    const previousFirstResult = results[previousColumnFirstIndex].result;
+                    const currentFirstResult = results[currentColumnFirstIndex].result;
+                    
+                    if (previousFirstResult in colorMap && currentFirstResult in colorMap) {
+                        let pattern = [];
+                        if (previousFirstResult !== currentFirstResult) {
+                            // 다르면 같게 / 다르게 / 다르게 / 같게 / 같게
+                            pattern = ['same', 'different', 'different', 'same', 'same'];
+                        } else {
+                            // 같으면 다르게 / 같게 / 같게 / 다르게 / 다르게
+                            pattern = ['different', 'same', 'same', 'different', 'different'];
+                        }
+
+                        const predictionIndexInPattern = (len % numRows) - 1;
+                        if (predictionIndexInPattern < pattern.length) {
+                            const op = pattern[predictionIndexInPattern];
+                            const previousResultToCompare = results[previousColumnFirstIndex + predictionIndexInPattern + 1].result;
+                            
+                            if (previousResultToCompare in colorMap) {
+                                if (op === 'same') {
+                                    predictions.akmatin = previousResultToCompare;
+                                } else {
+                                    if (previousResultToCompare === 'P') {
+                                        predictions.akmatin = 'B';
+                                    } else {
+                                        predictions.akmatin = 'P';
+                                    }
+                                }
+                                akmatinPredicted = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // '같으면 다르게' 로직이 적용되지 않으면 기본 예측 적용
+            if (!akmatinPredicted) {
+                if (len > 0) {
+                    const lastResult = results[len - 1].result;
+                    if (lastResult === 'P' || lastResult === 'T') {
+                        predictions.akmatin = 'B';
+                    } else {
+                        predictions.akmatin = 'P';
+                    }
+                } else {
+                    predictions.akmatin = 'P';
+                }
+            }
+            
+            // 예측 중단 인덱스에 현재 인덱스가 포함되면 예측값을 null로 설정
+            if (predictions.stopIndices.includes(len)) {
+                predictions.akmatin = null;
+            }
+
+            return predictions;
+        }
+
+        // 보드 그리기 함수
+        function drawBoard(boardId, results, predictions = null) {
+            const boardElem = document.getElementById(boardId);
+            boardElem.innerHTML = '';
+            
+            if (boardId === 'board-6') {
+                const numRows = 6;
+                const totalResults = results.length;
+                let numCols = Math.ceil(totalResults / numRows);
+                
+                // 예측 칸을 포함하여 보드의 열 수를 동적으로 설정
+                if (akmatinEnabled && predictions) {
+                    numCols = Math.max(numCols, Math.ceil((totalResults + 1) / numRows));
+                }
+                boardElem.style.gridTemplateColumns = `repeat(${numCols + 1}, 25px)`;
+
+                // 1. 기존 게임 결과 그리기 (동그라미)
+                results.forEach((roundData, i) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    const col = Math.floor(i / numRows);
+                    const row = i % numRows;
+                    cell.style.gridColumnStart = col + 1;
+                    cell.style.gridRowStart = row + 1;
+
+                    const circle = document.createElement('div');
+                    circle.className = 'w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white';
+                    circle.style.backgroundColor = colorMap[roundData.result] || 'gray';
+                    circle.textContent = roundData.result;
+                    cell.appendChild(circle);
+                    
+                    boardElem.appendChild(cell);
+                });
+                
+                // 2. 악마틴 예측 그리기 (결과 칸에 겹치지 않게)
+                if (akmatinEnabled && predictions) {
+                    const nextIndex = totalResults;
+                    const nextCol = Math.floor(nextIndex / numRows);
+                    const nextRow = nextIndex % numRows;
+
+                    const predCell = document.createElement('div');
+                    predCell.className = 'cell';
+                    predCell.style.gridColumnStart = nextCol + 1;
+                    predCell.style.gridRowStart = nextRow + 1;
+                    
+                    // 다음 칸이 'X' 표시 중단 인덱스에 포함되면 'X'를 표시
+                    if (predictions.stopIndices.includes(nextIndex)) {
+                         const xMark = document.createElement('div');
+                         xMark.className = 'prediction-x';
+                         xMark.textContent = 'X';
+                         predCell.appendChild(xMark);
+                    } else if (predictions.akmatin !== null) {
+                        // 그 외 일반 예측 (점선 원)
+                        const circle = document.createElement('div');
+                        circle.className = 'w-5 h-5 rounded-full border-2 border-dashed absolute';
+                        circle.style.borderColor = colorMap[predictions.akmatin];
+                        
+                        const text = document.createElement('div');
+                        text.className = 'absolute text-xs font-bold';
+                        text.textContent = predictions.akmatin;
+                        text.style.color = colorMap[predictions.akmatin];
+                        
+                        predCell.appendChild(circle);
+                        predCell.appendChild(text);
+                    }
+                    boardElem.appendChild(predCell);
+                }
+
+            } else { // 2매표 보드
+                boardElem.style.gridTemplateColumns = `repeat(${results.length}, 25px)`;
+                
+                results.forEach((column, colIndex) => {
+                    column.forEach((item, rowIndex) => {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        
+                        const circle = document.createElement('div');
+                        circle.className = 'w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white';
+                        circle.style.backgroundColor = colorMap[item.result] || 'gray';
+                        circle.textContent = item.result;
+                        cell.appendChild(circle);
+
+                        cell.style.gridColumnStart = colIndex + 1;
+                        cell.style.gridRowStart = rowIndex + 1;
+                        
+                        boardElem.appendChild(cell);
+                    });
+                });
+            }
+        }
+        
+        // 보드 및 통계 업데이트
+        function updateAllBoards(data) {
+            gameData = data;
+            const predictions = getPredictions(gameData.board_6);
+            drawBoard('board-6', gameData.board_6, predictions);
+            drawBoard('board-2-1', gameData.board_2_1);
+            drawBoard('board-2-2', gameData.board_2_2);
+            updateStats(gameData.board_6);
+            updatePredictions(predictions);
+        }
+
+        // 통계 업데이트
+        function updateStats(results) {
+            const statsElem = document.getElementById('stats-6');
+            const total = results.length;
+            const pCount = results.filter(r => r.result === 'P').length;
+            const bCount = results.filter(r => r.result === 'B').length;
+            const tCount = results.filter(r => r.result === 'T').length;
+            const pPercent = total > 0 ? (pCount / total * 100).toFixed(1) : 0;
+            const bPercent = total > 0 ? (bCount / total * 100).toFixed(1) : 0;
+            statsElem.textContent = `총: ${total} | P: ${pCount} (${pPercent}%) | B: ${bCount} (${bPercent}%) | T: ${tCount}`;
+        }
+
+        // 예측 메시지 업데이트
+        function updatePredictions(predictions) {
+            const akmatinPredLabel = document.getElementById('akmatin-pred-label');
+            const currentIndex = gameData.board_6.length;
+
+            if (akmatinEnabled) {
+                 if (predictions.stopIndices.includes(currentIndex)) {
+                    akmatinPredLabel.textContent = `악마틴 예측: 배팅 중단`;
+                    akmatinPredLabel.style.color = '#D9534F';
+                } else if (predictions.akmatin !== null) {
+                    akmatinPredLabel.textContent = `악마틴 예측: ${predictions.akmatin}`;
+                    akmatinPredLabel.style.color = colorMap[predictions.akmatin];
+                } else {
+                    akmatinPredLabel.textContent = `악마틴 예측: -`;
+                    akmatinPredLabel.style.color = '#333';
+                }
+            } else {
+                akmatinPredLabel.textContent = `악마틴 예측: -`;
+                akmatinPredLabel.style.color = '#333';
+            }
+        }
+        
+        // 서버와 통신 및 상태 업데이트
+        async function fetchAndUpdate(url, method = 'GET', data = null) {
+            const options = { method, headers: { 'Content-Type': 'application/json' } };
+            if (data) options.body = JSON.stringify(data);
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                if (result.success) {
+                    updateAllBoards(result);
+                    if (url !== '/reset' && result.message) {
+                        showMessage(result.message);
+                    }
+                } else {
+                    showMessage(result.message || '오류가 발생했습니다.');
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                showMessage('네트워크 오류가 발생했습니다.');
+            }
+        }
+
+        function addRound(result) {
+            fetchAndUpdate('/add_round', 'POST', { result });
+        }
+
+        function deleteLast() {
+            fetchAndUpdate('/delete_last', 'POST');
+        }
+
+        function resetGameConfirmation() {
+            document.getElementById('confirmation-modal').style.display = 'flex';
+        }
+
+        function closeResetConfirmation() {
+            document.getElementById('confirmation-modal').style.display = 'none';
+        }
+
+        function confirmReset() {
+            closeResetConfirmation();
+            fetchAndUpdate('/reset', 'POST');
+        }
+
+        function toggleAkmatin() {
+            akmatinEnabled = !akmatinEnabled;
+            document.getElementById('akmatin-btn').textContent = `악마틴 예측 (${akmatinEnabled ? 'ON' : 'OFF'})`;
+            document.getElementById('akmatin-btn').style.backgroundColor = akmatinEnabled ? '#5CB85C' : '#777777';
+            updateAllBoards(gameData);
+        }
+
+        function showMessage(msg) {
+            const msgBox = document.getElementById('message-box');
+            const msgText = document.getElementById('message-text');
+            msgText.innerHTML = msg;
+            msgBox.style.display = 'flex';
+        }
+
+        function closeMessageBox() {
+            document.getElementById('message-box').style.display = 'none';
+        }
+        
+        function showUsageGuide() {
+            const guideText = `
+👹악마틴 베팅 프로그램 가이드👹
+
+악마틴 베팅은 마틴게일 베팅법을 적용합니다. 금액을 2배로 늘려 한 번의 승리로 모든 손실을 복구하고 수익을 얻는 전략입니다. 4마틴(1게임 세로 6줄에서 4번만 배팅) 적중시 나머지 칸은 배팅하지 않습니다.(다음 새로운 줄 부터 다시 배팅 합니다.)
+
+금액 조절:
+졌을 때: 다음 마틴 베팅 금액을 2배로 올립니다.
+예시: 금액(2000원기준)
+1배팅:2000원
+2번째배팅:4000원
+3번째배팅:10000+최소타이배팅2000원
+4번째배팅:22000+최소타이배팅2000원
+(3번째4번째 타이 배팅 필수= 미적중 손실금 비례)
+
+1게임 4마틴 터졌을 경우: 다음 마틴 베팅 기존 마팅 금액의 2배로 올립니다.
+예시: 금액(4000원기준)
+첫배팅:4000원
+두번째배팅:8000원
+세번째배팅:18000+최소타이배팅2000원
+네번째배팅:44000+최소타이배팅4000원
+(3번째4번째 타이 배팅 필수= 미적중 손실금 비례)
+
+주의사항
+1. 이전 앞 줄(6개 칸) 타이가 없을때 배팅
+2. 진행중인 줄 2번 칸 3번 칸 연속 타이가 뜰시(배팅을 멈춰야 합니다) 새로운 게임 대기
+ 
+P, B, T 버튼: 게임 결과를 입력하고, '한칸 삭제'로 마지막에 입력한 내용을 수정
+리셋: 현재 진행 중인 모든 기록을 초기화 합니다.
+예측 기능: 악마틴 버튼을 켜거나 끄며 예측 결과를 참고할 수 있습니다.
+6매표 아래 2매표는 (젤리벨리 베팅법 적용 예측) 패턴이 반복되는 슈에서 참고.
+젤루악마틱 배팅으로 승리 하시길 바랍니다.
+<br><br>
+<p style="text-align:center; font-weight: bold; margin-top: 15px;">문의 텔레그램 : <a href="https://t.me/+ZtcdqH1WP2FhZDE1" target="_blank" style="color: #007bff;">https://t.me/+ZtcdqH1WP2FhZDE1</a></p>
+`;
+            showMessage(guideText);
+        }
+
+        function showSiteRecommendation() {
+            const siteRecText = `
+<h3 style="margin: 0; padding: 0; font-size: 1.25rem; font-weight: bold; color: #fff;">⭐️ 메이저 사이트 추천</h3>
+<p style="margin: 0; font-size: 0.875rem; color: #cbd5e0;">안전하고 빠른 환전이 가능한 메이저 사이트입니다. 추천 코드로 가입하고 특별한 혜택을 받으세요.</p>
+<hr style="border-color: #4A5568; margin: 8px 0;">
+<h4 style="margin: 0; font-size: 1rem; color: #fff;">주요 혜택:</h4>
+<ul style="margin: 0 0 8px 20px; padding: 0; font-size: 0.875rem; color: #cbd5e0;">
+    <li style="margin-bottom: 4px;">✅ **15분 이내** 빠른 환전</li>
+    <li style="margin-bottom: 4px;">🎁 신규 가입 보너스 (슬롯, 스포츠 입플)</li>
+    <li>🔒 먹튀 걱정 없는 안전성</li>
+</ul>
+<div style="text-align: center; margin: 16px 0;">
+    <p style="margin: 0; font-size: 0.875rem; font-weight: bold; color: #e2e8f0;">사이트 바로가기</p>
+    <a href="https://smtb-0038.com" target="_blank" style="display: inline-block; padding: 8px 16px; background-color: #4A5568; color: #90cdf4; text-decoration: none; border-radius: 5px; font-weight: bold;">https://smtb-0038.com</a>
+    <p style="margin: 8px 0 0 0; font-size: 0.875rem; font-weight: bold; color: #e2e8f0;">추천 코드: nevermind0</p>
+</div>
+<hr style="border-color: #4A5568; margin: 8px 0;">
+<h3 style="margin: 0; font-size: 1rem; font-weight: bold; color: #fff;">💸 꽁머니 & 입금 플러스(입플) 추천</h3>
+<p style="margin: 0; font-size: 0.875rem; color: #cbd5e0;">검증된 슬롯 사이트들의 다양한 신규 회원 혜택을 확인하세요.</p>
+<ul style="list-style: none; padding: 0; margin: 8px 0 0 0; font-size: 0.875rem;">
+        <li style="margin-bottom: 4px;"><a href="http://vip9999.betkor85.vip/?referralCode=mdm5816" target="_blank" style="color: #90cdf4;">BETKOR 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://win888.krvip4l8.vip/?referralCode=xur7109" target="_blank" style="color: #90cdf4;">krvip 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://www.betkrw5l6.vip/?r=syo7486" target="_blank" style="color: #90cdf4;">betkrw 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://www.krwin57l.cc/?r=zpb2093" target="_blank" style="color: #90cdf4;">KRWIN 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://kcw666.6i7kcwin.cc/?referralCode=etx6967" target="_blank" style="color: #90cdf4;">KCWIN 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://win888.korwin4l8.vip/?referralCode=tmd5466" target="_blank" style="color: #90cdf4;">KORWIN 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://www.6i7skwin.com/?r=bys2085" target="_blank" style="color: #90cdf4;">SKWIN 바로가기</a></li>
+        <li style="margin-bottom: 4px;"><a href="http://vip999.25ktwin.com/?referralCode=qqo4394" target="_blank" style="color: #90cdf4;">KTWIN 바로가기</a></li>
+        <li><a href="http://win999.wonwin2i8.club/?referralCode=hfr7713" target="_blank" style="color: #90cdf4;">WONWIN 바로가기</a></li>
+    </ul>
+</div>
+<hr style="border-color: #4A5568; margin: 8px 0;">
+<p style="text-align:center; font-weight: bold; margin-top: 15px; color: #e2e8f0;">문의 텔레그램: <a href="https://t.me/+ZtcdqH1WP2FhZDE1" target="_blank" style="color: #007bff;">https://t.me/+ZtcdqH1WP2FhZDE1</a></p>
+`;
+            showMessage(siteRecText);
+        }
+
+        window.onload = () => {
+            fetchAndUpdate('/get_game_state');
+        };
+    </script>
+</body>
+</html>
